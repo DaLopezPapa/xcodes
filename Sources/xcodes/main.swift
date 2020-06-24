@@ -1,5 +1,5 @@
 import Foundation
-import Guaka
+import ArgumentParser
 import Version
 import PromiseKit
 import XcodesKit
@@ -13,134 +13,160 @@ let installer = XcodeInstaller(configuration: configuration, xcodeList: xcodeLis
 
 migrateApplicationSupportFiles()
 
-// This is awkward, but Guaka wants a root command in order to add subcommands,
-// but then seems to want it to behave like a normal command even though it'll only ever print the help.
-// But it doesn't even print the help without the user providing the --help flag,
-// so we need to tell it to do this explicitly
-var app: Command!
-app = Command(usage: "xcodes") { _, _ in print(GuakaConfig.helpGenerator.init(command: app).helpMessage) }
+struct Xcodes: ParsableCommand {
+    static var configuration = CommandConfiguration(
+        abstract: "Manage the Xcodes installed on your Mac",
+        shouldDisplay: true,
+        subcommands: [Install.self, Installed.self, List.self, Select.self, Uninstall.self, Update.self, Version.self]
+    )
 
-let installed = Command(usage: "installed",
-                        shortMessage: "List the versions of Xcode that are installed") { _, _ in
-    installer.printInstalledXcodes()
-        .done {
-            exit(0)
-        }
-        .catch { error in
-            print(error.legibleLocalizedDescription)
-            exit(1)
-        }
+    struct Install: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Download and install a specific version of Xcode",
+            discussion: """
+                        EXAMPLES:
+                          xcodes install 10.2.1
+                          xcodes install 11 Beta 7
+                          xcodes install 11.2 GM seed
+                          xcodes install 9.0 --url ~/Archive/Xcode_9.xip
+                        """
+        )
 
-    RunLoop.current.run()
-}
-app.add(subCommand: installed)
+        @Argument(help: "The version to install")
+        var version: [String] = []
+        
+        @Option(help: "Local path to Xcode .xip")
+        var url: String?
+            
+        func run() {
+            installer.install(version.joined(separator: " "), url)
+                .done { Install.exit() }
+                .catch { error in
+                    switch error {
+                    case Process.PMKError.execution(let process, let standardOutput, let standardError):
+                        Current.logging.log("""
+                            Failed executing: `\(process)` (\(process.terminationStatus))
+                            \([standardOutput, standardError].compactMap { $0 }.joined(separator: "\n"))
+                            """)
+                    default:
+                        Current.logging.log(error.legibleLocalizedDescription)
+                    }
 
-let printFlag = Flag(shortName: "p", longName: "print-path", value: false, description: "Print the path of the selected Xcode")
-let select = Command(usage: "select <version or path>",
-                     shortMessage: "Change the selected Xcode",
-                     longMessage: "Change the selected Xcode. Run without any arguments to interactively select from a list, or provide an absolute path.",
-                     flags: [printFlag],
-                     example: """
-                              xcodes select
-                              xcodes select 11.4.0
-                              xcodes select /Applications/Xcode-11.4.0.app
-                              xcodes select -p
-                              """) { flags, args in
-    selectXcode(shouldPrint: flags.getBool(name: "print-path") ?? false, pathOrVersion: args.joined(separator: " "))
-        .catch { error in
-            print(error.legibleLocalizedDescription)
-            exit(1)
-        }
+                    Install.exit(withError: ExitCode.failure)
+                }
 
-    RunLoop.current.run()
-}
-app.add(subCommand: select)
-
-let list = Command(usage: "list",
-                   shortMessage: "List all versions of Xcode that are available to install") { _, _ in
-    firstly { () -> Promise<Void> in
-        if xcodeList.shouldUpdate {
-            return installer.updateAndPrint()
-        }
-        else {
-            return installer.printAvailableXcodes(xcodeList.availableXcodes, installed: Current.files.installedXcodes())
+            RunLoop.current.run()
         }
     }
-    .done {
-        exit(0)
-    }
-    .catch { error in
-        print(error.legibleLocalizedDescription)
-        exit(1)
-    }
 
-    RunLoop.current.run()
-}
-app.add(subCommand: list)
+    struct Installed: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "List the versions of Xcode that are installed"
+        )
+        
+        func run() {
+            installer.printInstalledXcodes()
+                .done { Installed.exit() }
+                .catch { error in Installed.exit(withLegibleError: error) }
 
-let update = Command(usage: "update",
-                     shortMessage: "Update the list of available versions of Xcode") { _, _ in
-    firstly {
-        installer.updateAndPrint()
+            RunLoop.current.run()
+        }
     }
-    .catch { error in
-        print(error.legibleLocalizedDescription)
-        exit(1)
-    }
-
-    RunLoop.current.run()
-}
-app.add(subCommand: update)
-
-let urlFlag = Flag(longName: "url", type: String.self, description: "Local path to Xcode .xip")
-let install = Command(usage: "install <version>",
-                      shortMessage: "Download and install a specific version of Xcode",
-                      flags: [urlFlag],
-                      example: """
-                               xcodes install 10.2.1
-                               xcodes install 11 Beta 7
-                               xcodes install 11.2 GM seed
-                               xcodes install 9.0 --url ~/Archive/Xcode_9.xip
-                               """) { flags, args in
-    let versionString = args.joined(separator: " ")
-    installer.install(versionString, flags.getString(name: "url"))
-        .catch { error in
-            switch error {
-            case Process.PMKError.execution(let process, let standardOutput, let standardError):
-                Current.logging.log("""
-                    Failed executing: `\(process)` (\(process.terminationStatus))
-                    \([standardOutput, standardError].compactMap { $0 }.joined(separator: "\n"))
-                    """)
-            default:
-                Current.logging.log(error.legibleLocalizedDescription)
+    
+    struct List: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "List all versions of Xcode that are available to install"
+        )
+        
+        func run() {
+            firstly { () -> Promise<Void> in
+                if xcodeList.shouldUpdate {
+                    return installer.updateAndPrint()
+                }
+                else {
+                    return installer.printAvailableXcodes(xcodeList.availableXcodes, installed: Current.files.installedXcodes())
+                }
             }
+            .done { List.exit() }
+            .catch { error in List.exit(withLegibleError: ExitCode.failure) }
 
-            exit(1)
+            RunLoop.current.run()
         }
+    }
+    
+    struct Select: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Change the selected Xcode",
+            discussion: """
+                        Run without any arguments to interactively select from a list, or provide an absolute path.
 
-    RunLoop.current.run()
-}
-app.add(subCommand: install)
-
-let uninstall = Command(usage: "uninstall <version>",
-                        shortMessage: "Uninstall a specific version of Xcode",
-                        example: "xcodes uninstall 10.2.1") { _, args in
-        let versionString = args.joined(separator: " ")
-    installer.uninstallXcode(versionString)
-        .catch { error in
-            print(error.legibleLocalizedDescription)
-            exit(1)
+                        EXAMPLES:
+                          xcodes select
+                          xcodes select 11.4.0
+                          xcodes select /Applications/Xcode-11.4.0.app
+                          xcodes select -p
+                        """
+        )
+        
+        @ArgumentParser.Flag(name: [.customShort("p"), .customLong("print-path")], help: "Print the path of the selected Xcode")
+        var print: Bool = false
+        
+        @Argument(help: "Version or path")
+        var versionOrPath: [String] = []
+    
+        func run() {
+            selectXcode(shouldPrint: print, pathOrVersion: versionOrPath.joined(separator: " "))
+                .done { Select.exit() }
+                .catch { error in Select.exit(withLegibleError: error) }
+            
+            RunLoop.current.run()
         }
+    }
+    
+    struct Uninstall: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Uninstall a specific version of Xcode",
+            discussion: """
+                        EXAMPLES:
+                          xcodes uninstall 10.2.1
+                        """
+        )
+        
+        @Argument(help: "The version to uninstall")
+        var version: [String] = []
+        
+        func run() {
+            installer.uninstallXcode(version.joined(separator: " "))
+                .done { Uninstall.exit() }
+                .catch { error in Uninstall.exit(withLegibleError: ExitCode.failure) }
+        
+            RunLoop.current.run()
+        }
+    }
+    
+    struct Update: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Update the list of available versions of Xcode"
+        )
+        
+        func run() {
+            installer.updateAndPrint()
+                .done { Update.exit() }
+                .catch { error in Update.exit(withLegibleError: error) }
 
-    RunLoop.current.run()
+            RunLoop.current.run()
+        }
+    }
+    
+    struct Version: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Print the version number of xcodes itself"
+        )
+        
+        func run() {
+            Current.logging.log(XcodesKit.version.description)
+        }
+    }
 }
-app.add(subCommand: uninstall)
 
-let version = Command(usage: "version",
-                      shortMessage: "Print the version number of xcodes itself") { _, _ in
-    print(XcodesKit.version)
-    exit(0)
-}
-app.add(subCommand: version)
-
-app.execute()
+Xcodes.main()

@@ -11,15 +11,6 @@
         }
       },
       {
-        "package": "Guaka",
-        "repositoryURL": "https://github.com/nsomar/Guaka.git",
-        "state": {
-          "branch": null,
-          "revision": "90c03a9e4c894808a8882a16ccf56743b4b2d40c",
-          "version": "0.4.0"
-        }
-      },
-      {
         "package": "KeychainAccess",
         "repositoryURL": "https://github.com/kishikawakatsumi/KeychainAccess.git",
         "state": {
@@ -56,12 +47,12 @@
         }
       },
       {
-        "package": "StringScanner",
-        "repositoryURL": "https://github.com/getGuaka/StringScanner.git",
+        "package": "swift-argument-parser",
+        "repositoryURL": "https://github.com/apple/swift-argument-parser",
         "state": {
           "branch": null,
-          "revision": "39f9b77e37c69ab6fec14aadf79a066468ce63e3",
-          "version": "0.4.0"
+          "revision": "eb51f949cdd0c9d88abba9ce79d37eb7ea1231d0",
+          "version": "0.2.0"
         }
       },
       {
