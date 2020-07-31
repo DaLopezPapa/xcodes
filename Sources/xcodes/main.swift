@@ -32,10 +32,12 @@ struct Xcodes: ParsableCommand {
                         """
         )
 
-        @Argument(help: "The version to install")
+        @Argument(help: "The version to install",
+                  completion: .custom { args in xcodeList.availableXcodes.sorted { $0.version < $1.version }.map { $0.version.xcodeDescription } })
         var version: [String] = []
         
-        @Option(help: "Local path to Xcode .xip")
+        @Option(help: "Local path to Xcode .xip",
+                completion: .file(extensions: ["xip"]))
         var url: String?
             
         func run() {
@@ -111,7 +113,8 @@ struct Xcodes: ParsableCommand {
         @ArgumentParser.Flag(name: [.customShort("p"), .customLong("print-path")], help: "Print the path of the selected Xcode")
         var print: Bool = false
         
-        @Argument(help: "Version or path")
+        @Argument(help: "Version or path",
+                  completion: .custom { _ in Current.files.installedXcodes().sorted { $0.version < $1.version }.map { $0.version.xcodeDescription } })
         var versionOrPath: [String] = []
     
         func run() {
@@ -132,7 +135,8 @@ struct Xcodes: ParsableCommand {
                         """
         )
         
-        @Argument(help: "The version to uninstall")
+        @Argument(help: "The version to uninstall",
+                  completion: .custom { _ in Current.files.installedXcodes().sorted { $0.version < $1.version }.map { $0.version.xcodeDescription } })
         var version: [String] = []
         
         func run() {

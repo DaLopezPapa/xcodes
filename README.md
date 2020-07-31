@@ -93,6 +93,21 @@ Xcode 11.2.0 has been installed to /Applications/Xcode-11.2.0.app
 - `update`: Update the list of available versions of Xcode
 - `version`: Print the version number of xcodes itself
 
+### Shell Completion Scripts
+
+xcodes can generate completion scripts which allow you to press the tab key on your keyboard to autocomplete commands and arguments when typing an xcodes command. The steps to install a completion script depend on the shell that you use. More information about installation instructions for different shells and the underlying implementation is available in the [swift-argument-parser repo](https://github.com/apple/swift-argument-parser/blob/master/Documentation/07%20Completion%20Scripts.md).
+
+<details>
+<summary>Zsh, with oh-my-zsh:</summary>
+
+Run the following commands:
+
+```sh
+mkdir ~/.oh-my-zsh/completions
+xcodes --generate-completion-script > ~/.oh-my-zsh/completions/_xcodes
+```
+</details>
+
 ## Development
 
 You'll need Xcode 11 in order to build and run xcodes. 
